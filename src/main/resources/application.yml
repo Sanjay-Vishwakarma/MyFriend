@@ -1,0 +1,35 @@
+server:
+  port: 9177
+  servlet:
+    context-path: /api
+
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/my_friend
+      auto-index-creation: true
+  security:
+    user:
+      name: admin
+      password: admin123
+  main:
+    banner-mode: off
+
+app:
+  jwt:
+    secret: 0A6DHDpE3Cqdwe7JXm7c1SPRki0moOwfKBaB5aZ5zmM=
+    expiration-ms: 86400000 # 24 hours
+  websocket:
+    endpoint: /ws
+    allowed-origins: "*"
+    broker-prefix: /topic
+    user-destination-prefix: /user
+
+logging:
+  level:
+    root: INFO
+    com.communication.app: DEBUG
+  file:
+    name: logs/communication-app.log
+  pattern:
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
