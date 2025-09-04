@@ -1,6 +1,7 @@
 package com.realtime.myfriend.controller;
 
 
+import com.realtime.myfriend.dtos.UserDTO;
 import com.realtime.myfriend.entity.User;
 import com.realtime.myfriend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,7 +18,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 @RestController
-@RequestMapping("/api/admin/users")
+@RequestMapping("/admin/users")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Admin", description = "Admin management API")
@@ -29,7 +30,7 @@ public class AdminController {
 
     @GetMapping
     @Operation(summary = "Get all users (Admin only)")
-    public CompletableFuture<ResponseEntity<List<User>>> getAllUsersAdmin() {
+    public CompletableFuture<ResponseEntity<List<UserDTO>>> getAllUsersAdmin() {
         return userService.getAllUsers()
                 .thenApply(ResponseEntity::ok)
                 .exceptionally(e -> {
