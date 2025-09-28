@@ -14,6 +14,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
 import java.security.Principal;
+import java.util.Map;
 
 @Controller
 @RequiredArgsConstructor
@@ -39,22 +40,30 @@ public class ChatWebSocketHandler {
         String senderId = userService.findIdByUsername(username);
         chatMessage.setSenderId(senderId);
 
+        // ✅ Proper async handling
         chatService.saveMessage(senderId, chatMessage.getReceiverId(), chatMessage.getContent())
-                .thenAccept(saved -> {
-                    String senderUsername = userService.findUsernameById(saved.getSenderId());
-                    String receiverUsername = userService.findUsernameById(saved.getReceiverId());
+                .whenComplete((savedMessage, ex) -> {
+                    if (ex != null) {
+                        logger.error("Failed to save message: {}", ex.getMessage());
+                        return;
+                    }
 
-                    // Send back to both users by username (Principal name)
-                    messagingTemplate.convertAndSendToUser(
-                            senderUsername, "/queue/messages", saved
-                    );
-                    messagingTemplate.convertAndSendToUser(
-                            receiverUsername, "/queue/messages", saved
-                    );
+                    try {
+                        String senderUsername = userService.findUsernameById(savedMessage.getSenderId());
+                        String receiverUsername = userService.findUsernameById(savedMessage.getReceiverId());
 
-                    logger.info("Message [{}] sent from {} → {}", saved.getId(), senderUsername, receiverUsername);
+                        messagingTemplate.convertAndSendToUser(
+                                senderUsername, "/queue/messages", savedMessage
+                        );
+                        messagingTemplate.convertAndSendToUser(
+                                receiverUsername, "/queue/messages", savedMessage
+                        );
+
+                        logger.info("Message [{}] sent from {} → {}", savedMessage.getId(), senderUsername, receiverUsername);
+                    } catch (Exception e) {
+                        logger.error("Error sending WebSocket message: {}", e.getMessage());
+                    }
                 });
-
     }
 
     @MessageMapping("/chat.read")
@@ -68,21 +77,66 @@ public class ChatWebSocketHandler {
             return;
         }
 
-        String username = principal.getName();
-        String readerId = userService.findIdByUsername(username);
+        try {
+            String username = principal.getName();
+            String readerId = userService.findIdByUsername(username);
 
-        if (!readerId.equals(receipt.getReceiverId())) {
-            logger.warn("User {} tried to spoof read receipts!", username);
-            return;
+            if (!readerId.equals(receipt.getReceiverId())) {
+                logger.warn("User {} tried to spoof read receipts for receiver {}", username, receipt.getReceiverId());
+                return;
+            }
+
+            // ✅ Async mark as read with comprehensive error handling
+            chatService.markMessagesAsRead(receipt.getSenderId(), receipt.getReceiverId(), receipt.getMessageIds())
+                    .whenComplete((result, ex) -> {
+                        if (ex != null) {
+                            handleMarkReadError(ex, receipt);
+                            return;
+                        }
+                        handleMarkReadSuccess(receipt);
+                    });
+
+        } catch (Exception ex) {
+            logger.error("Error processing read receipt: {}", ex.getMessage());
         }
+    }
 
-        chatService.markMessagesAsRead(receipt.getSenderId(), receipt.getReceiverId(), receipt.getMessageIds());
+    private void handleMarkReadSuccess(ReadReceipt receipt) {
+        try {
+            // Convert sender ID to username for WebSocket routing
+            String senderUsername = userService.findUsernameById(receipt.getSenderId());
 
-        messagingTemplate.convertAndSendToUser(
-                receipt.getSenderId(), "/queue/read", receipt
-        );
+            messagingTemplate.convertAndSendToUser(
+                    senderUsername, "/queue/read", receipt
+            );
 
-        logger.info("User {} marked messages as read from {}", receipt.getReceiverId(), receipt.getSenderId());
+            logger.info("User {} marked {} messages as read from {}",
+                    receipt.getReceiverId(),
+                    receipt.getMessageIds() != null ? receipt.getMessageIds().size() : "all",
+                    receipt.getSenderId());
+
+        } catch (Exception e) {
+            logger.error("Error sending read receipt confirmation: {}", e.getMessage());
+        }
+    }
+
+    private void handleMarkReadError(Throwable ex, ReadReceipt receipt) {
+        logger.error("Failed to mark messages as read from {} to {}: {}",
+                receipt.getSenderId(), receipt.getReceiverId(), ex.getMessage());
+
+        // Optionally send error back to the client who tried to mark as read
+        try {
+            String receiverUsername = userService.findUsernameById(receipt.getReceiverId());
+            Map<String, Object> errorResponse = Map.of(
+                    "error", "Failed to mark messages as read",
+                    "timestamp", System.currentTimeMillis()
+            );
+            messagingTemplate.convertAndSendToUser(
+                    receiverUsername, "/queue/errors", errorResponse
+            );
+        } catch (Exception e) {
+            logger.error("Failed to send error response to client: {}", e.getMessage());
+        }
     }
 
 }

@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: my-spring-boot-app
+    env: docker
+    plan: free
+    autoDeploy: true
+    dockerfilePath: ./Dockerfile
+    branch: main
+    healthCheckPath: /
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod  # change to dev for development deployment
+      - key: JAVA_OPTS
+        value: "-Xms256m -Xmx512m"

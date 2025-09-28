@@ -1,9 +1,11 @@
 package com.realtime.myfriend.service;
 
 import com.realtime.myfriend.entity.ChatMessage;
+import com.realtime.myfriend.entity.User;
 import com.realtime.myfriend.exception.UserNotFoundException;
 import com.realtime.myfriend.repository.ChatMessageRepository;
 import com.realtime.myfriend.repository.UserRepository;
+import com.realtime.myfriend.service.PresenceService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,103 +33,94 @@ public class ChatService {
     private final PresenceService presenceService;
     private final MongoTemplate mongoTemplate;
 
+    // ✅ Async with @Async - maintains security context
+    @Async
     @Transactional
     public CompletableFuture<ChatMessage> sendMessage(String senderId, String receiverId, String content) {
-        return CompletableFuture.supplyAsync(() -> {
-            if (!userRepository.existsById(senderId)) {
-                throw new UserNotFoundException("Sender not found with id: " + senderId);
-            }
-            if (!userRepository.existsById(receiverId)) {
-                throw new UserNotFoundException("Receiver not found with id: " + receiverId);
-            }
+        if (!userRepository.existsById(senderId)) {
+            throw new UserNotFoundException("Sender not found with id: " + senderId);
+        }
+        if (!userRepository.existsById(receiverId)) {
+            throw new UserNotFoundException("Receiver not found with id: " + receiverId);
+        }
 
-            ChatMessage message = ChatMessage.builder()
-                    .senderId(senderId)
-                    .receiverId(receiverId)
-                    .content(content)
-                    .timestamp(LocalDateTime.now())
-                    .read(false)
-                    .build();
+        ChatMessage message = ChatMessage.builder()
+                .senderId(senderId)
+                .receiverId(receiverId)
+                .content(content)
+                .timestamp(LocalDateTime.now())
+                .read(false)
+                .build();
 
-            ChatMessage savedMessage = chatMessageRepository.save(message);
+        ChatMessage savedMessage = chatMessageRepository.save(message);
 
-            if (presenceService.isUserOnline(receiverId)) {
-                // ✅ Fetch username from DB
-                String receiverUsername = userRepository.findById(receiverId)
-                        .map(u -> u.getUsername())
-                        .orElseThrow(() -> new UserNotFoundException("Receiver not found"));
+        // ✅ Send via WebSocket if user is online
+        if (presenceService.isUserOnline(receiverId)) {
+            String receiverUsername = userRepository.findById(receiverId)
+                    .map(User::getUsername)
+                    .orElseThrow(() -> new UserNotFoundException("Receiver not found"));
+            messagingTemplate.convertAndSendToUser(
+                    receiverUsername, "/queue/messages", savedMessage
+            );
+        }
 
-                // ✅ Use username (principal name) for STOMP destination
-                messagingTemplate.convertAndSendToUser(
-                        receiverUsername, "/queue/messages", savedMessage
-                );
-            }
-
-            return savedMessage;
-        });
+        return CompletableFuture.completedFuture(savedMessage);
     }
 
+    // ✅ Async with @Async
+    @Async
     public CompletableFuture<List<ChatMessage>> getConversation(String user1Id, String user2Id) {
-        return CompletableFuture.supplyAsync(() ->
-                chatMessageRepository.findConversation(user1Id, user2Id)
-        );
+        List<ChatMessage> messages = chatMessageRepository.findConversation(user1Id, user2Id);
+        return CompletableFuture.completedFuture(messages);
     }
 
-    public List<ChatMessage> findConversation(String user1Id, String user2Id) {
-        return chatMessageRepository.findConversationWithUsername(
-                user1Id, user2Id,
-                userRepository.findById(user1Id).map(u -> u.getUsername()).orElse(null),
-                userRepository.findById(user2Id).map(u -> u.getUsername()).orElse(null)
-        );
-    }
-
+    // ✅ Async with @Async
     @Async
     @Transactional
     public CompletableFuture<ChatMessage> saveMessage(String senderId, String receiverId, String content) {
-        return CompletableFuture.supplyAsync(() -> {
-            if (!userRepository.existsById(receiverId)) {
-                throw new UserNotFoundException("Receiver not found with id: " + receiverId);
-            }
+        if (!userRepository.existsById(receiverId)) {
+            throw new UserNotFoundException("Receiver not found with id: " + receiverId);
+        }
 
-            ChatMessage message = ChatMessage.builder()
-                    .senderId(senderId)
-                    .receiverId(receiverId)
-                    .content(content)
-                    .timestamp(LocalDateTime.now())
-                    .read(false)
-                    .build();
+        ChatMessage message = ChatMessage.builder()
+                .senderId(senderId)
+                .receiverId(receiverId)
+                .content(content)
+                .timestamp(LocalDateTime.now())
+                .read(false)
+                .build();
 
-            return chatMessageRepository.save(message);
-        });
+        ChatMessage savedMessage = chatMessageRepository.save(message);
+        return CompletableFuture.completedFuture(savedMessage);
     }
 
+    // ✅ Async with @Async
+    @Async
     @Transactional
     public CompletableFuture<Void> markMessagesAsRead(String senderId, String receiverId, List<String> messageIds) {
-        return CompletableFuture.runAsync(() -> {
-            Query query = new Query();
+        Query query = new Query();
 
-            if (messageIds != null && !messageIds.isEmpty()) {
-                // ✅ mark only specific messages
-                query.addCriteria(Criteria.where("_id").in(messageIds));
-            } else {
-                // ✅ mark all unread messages from sender → receiver
-                query.addCriteria(Criteria.where("senderId").is(senderId)
-                        .and("receiverId").is(receiverId)
-                        .and("read").is(false));
-            }
+        if (messageIds != null && !messageIds.isEmpty()) {
+            query.addCriteria(Criteria.where("_id").in(messageIds));
+        } else {
+            query.addCriteria(Criteria.where("senderId").is(senderId)
+                    .and("receiverId").is(receiverId)
+                    .and("read").is(false));
+        }
 
-            Update update = new Update().set("read", true);
+        Update update = new Update().set("read", true);
+        mongoTemplate.updateMulti(query, update, ChatMessage.class);
 
-            mongoTemplate.updateMulti(query, update, ChatMessage.class);
+        if (messageIds != null && !messageIds.isEmpty()) {
+            logger.info("Marked {} specific messages as read from {} → {}", messageIds.size(), senderId, receiverId);
+        } else {
+            logger.info("Marked all unread messages as read from {} → {}", senderId, receiverId);
+        }
 
-            if (messageIds != null && !messageIds.isEmpty()) {
-                logger.info("Marked {} specific messages as read from {} → {}", messageIds.size(), senderId, receiverId);
-            } else {
-                logger.info("Marked all unread messages as read from {} → {}", senderId, receiverId);
-            }
-        });
+        return CompletableFuture.completedFuture(null);
     }
 
+    // Keep synchronous for simple operations
     public void updateManyAsRead(String senderId, String receiverId, List<String> messageIds) {
         Query query = new Query()
                 .addCriteria(Criteria.where("_id").in(messageIds)
@@ -136,7 +129,6 @@ public class ChatService {
                         .and("read").is(false));
 
         Update update = new Update().set("read", true);
-
         mongoTemplate.updateMulti(query, update, ChatMessage.class);
 
         logger.info("Marked {} messages as read from {} → {}", messageIds.size(), senderId, receiverId);

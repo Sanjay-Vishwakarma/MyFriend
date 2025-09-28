@@ -22,6 +22,7 @@ public class CorsConfig {
 //        config.addAllowedOriginPattern("*"); // Use patterns for production
         config.addAllowedHeader("*");
         config.addAllowedMethod("*");
+        config.setMaxAge(3600L); // 1 hour
 
         source.registerCorsConfiguration("/**", config);
         return new CorsFilter(source);

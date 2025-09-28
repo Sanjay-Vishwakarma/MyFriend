@@ -1,0 +1,35 @@
+server:
+  port: 8080 # Render usually maps external port automatically
+
+spring:
+  data:
+    mongodb:
+      uri: mongodb+srv://sjroot9:gvBZZkzcKXWGGRru@recharge.xniae.mongodb.net/?retryWrites=true&w=majority/my_friend
+      auto-index-creation: true
+  security:
+    user:
+      name: ${SPRING_ADMIN_USER:admin}
+      password: ${SPRING_ADMIN_PASSWORD:admin123}
+  main:
+    banner-mode: off
+    allow-circular-references: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:0A6DHDpE3Cqdwe7JXm7c1SPRki0moOwfKBaB5aZ5zmM=}
+    expiration-ms: 86400000
+  websocket:
+    endpoint: /ws
+    allowed-origins: "*"
+    broker-prefix: /topic
+    user-destination-prefix: /user
+
+logging:
+  level:
+    root: INFO
+    com.communication.app: INFO
+    org.springframework.security: INFO
+  file:
+    name: logs/communication-app.log
+  pattern:
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

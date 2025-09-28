@@ -14,6 +14,7 @@ spring:
       password: admin123
   main:
     banner-mode: off
+    allow-circular-references: true
 
 app:
   jwt:
