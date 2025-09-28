@@ -21,7 +21,6 @@ import java.util.concurrent.CompletableFuture;
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
-@CrossOrigin("http://localhost:3000")
 @Tag(name = "Authentication", description = "Authentication API")
 public class AuthenticationController {
     private static final Logger logger = LoggerFactory.getLogger(AuthenticationController.class);

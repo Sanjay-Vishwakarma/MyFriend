@@ -11,7 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.crossstore.ChangeSetPersister;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -25,7 +25,6 @@ import java.util.concurrent.CompletableFuture;
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Chat", description = "Chat API")
-@CrossOrigin("http://localhost:3000")
 public class ChatController {
     private static final Logger logger = LoggerFactory.getLogger(ChatController.class);
     
@@ -59,24 +58,36 @@ public class ChatController {
                 });
     }
 
-
     @GetMapping("/conversation")
     @PreAuthorize("hasRole('USER')")
     public CompletableFuture<ResponseEntity<List<ChatMessage>>> getConversation(
             @RequestParam String user2Id,
             Principal principal
     ) {
-        String currentUserId = principal.getName();
+        try {
+            String currentUsername = principal.getName();
+            logger.debug("Current username: {}", currentUsername);
 
-        System.out.println("currentUserId = " + currentUserId);
-        System.out.println("user2Id = " + user2Id);
-        List<ChatMessage> conversation = chatService.findConversation(currentUserId, user2Id);
-        System.out.println("conversation = " + conversation);
-        System.out.println("conversation size = " + conversation.size());
-        return CompletableFuture.completedFuture(ResponseEntity.ok(conversation));
+            // Get current user ID from username
+            return userService.getUserByUsername(currentUsername)
+                    .thenApply(currentUser -> {
+                        String currentUserId = currentUser.getId();
+                        logger.debug("Current user ID: {}, Other user ID: {}", currentUserId, user2Id);
 
+                        List<ChatMessage> conversation = chatService.findConversation(currentUserId, user2Id);
+                        logger.debug("Found {} messages in conversation", conversation.size());
+
+                        return ResponseEntity.ok(conversation);
+                    })
+                    .exceptionally(ex -> {
+                        logger.error("Failed to get conversation: {}", ex.getMessage());
+                        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+                    });
+        } catch (Exception e) {
+            logger.error("Error in getConversation: {}", e.getMessage());
+            return CompletableFuture.completedFuture(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
+        }
     }
-
 
     @PostMapping("/mark-read")
     @Operation(summary = "Mark messages as read")
@@ -91,6 +102,13 @@ public class ChatController {
                     logger.error("Failed to mark messages as read: {}", ex.getMessage());
                     return ResponseEntity.internalServerError().<Void>build();
                 });
+    }
+
+
+    @GetMapping("/testAuth")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<String> testAuth(Principal principal) {
+        return ResponseEntity.ok("Authenticated as: " + principal.getName());
     }
 
 }

@@ -11,8 +11,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -25,17 +27,30 @@ public class UserService {
     private final PresenceService presenceService;
 
     public CompletableFuture<User> getUserById(String userId) {
-        return CompletableFuture.supplyAsync(() -> 
-            userRepository.findById(userId)
-                    .orElseThrow(() -> new UserNotFoundException("User not found with id: " + userId))
+        return CompletableFuture.supplyAsync(() ->
+                userRepository.findById(userId)
+                        .orElseThrow(() -> new UserNotFoundException("User not found with id: " + userId))
         );
     }
 
     public CompletableFuture<User> getUserByUsername(String username) {
-        return CompletableFuture.supplyAsync(() -> 
-            userRepository.findByUsername(username)
-                    .orElseThrow(() -> new UserNotFoundException("User not found with username: " + username))
-        );
+        return CompletableFuture.supplyAsync(() -> {
+            logger.debug("Looking up user by username: {}", username);
+
+            // First try to find by username
+            Optional<User> userByUsername = userRepository.findByUsername(username);
+            if (userByUsername.isPresent()) {
+                return userByUsername.get();
+            }
+
+            // If not found by username, try by ID
+            Optional<User> userById = userRepository.findById(username);
+            if (userById.isPresent()) {
+                return userById.get();
+            }
+
+            throw new UserNotFoundException("User not found with identifier: " + username);
+        });
     }
 
     public CompletableFuture<List<UserDTO>> getAllUsers() {
@@ -63,13 +78,13 @@ public class UserService {
         return CompletableFuture.supplyAsync(() -> {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new UserNotFoundException("User not found with id: " + userId));
-            
+
             user.setName(updatedUser.getName());
             user.setEmail(updatedUser.getEmail());
             user.setDob(updatedUser.getDob());
             user.setGender(updatedUser.getGender());
             user.setUpdatedAt(LocalDateTime.now());
-            
+
             return userRepository.save(user);
         });
     }

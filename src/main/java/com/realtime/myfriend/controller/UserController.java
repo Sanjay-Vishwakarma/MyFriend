@@ -23,7 +23,6 @@ import java.util.concurrent.CompletableFuture;
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Users", description = "User management API")
-@CrossOrigin("http://localhost:3000")
 public class UserController {
     private static final Logger logger = LoggerFactory.getLogger(UserController.class);
     
