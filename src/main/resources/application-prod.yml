@@ -1,5 +1,5 @@
 server:
-  port: ${PORT:8080}  # Use Render's $PORT environment variable if present
+  port: ${PORT:8080}  # Use Render's injected port
 spring:
   data:
     mongodb:
@@ -12,6 +12,7 @@ spring:
   main:
     banner-mode: off
     allow-circular-references: true
+    lazy-initialization: true  # ✅ lazy init speeds up startup
 
 app:
   jwt:
@@ -22,6 +23,7 @@ app:
     allowed-origins: "*"
     broker-prefix: /topic
     user-destination-prefix: /user
+    enable-simple-broker: false  # ❌ Skip SimpleBroker in PROD
 
 logging:
   level:
@@ -37,7 +39,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,ready
   endpoint:
     health:
       show-details: never
