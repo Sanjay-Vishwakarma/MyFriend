@@ -1,6 +1,7 @@
 package com.realtime.myfriend.service;
 
 import com.realtime.myfriend.entity.ChatMessage;
+import com.realtime.myfriend.entity.User;
 import com.realtime.myfriend.exception.UserNotFoundException;
 import com.realtime.myfriend.repository.ChatMessageRepository;
 import com.realtime.myfriend.repository.UserRepository;
@@ -13,11 +14,13 @@ import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -30,9 +33,10 @@ public class ChatService {
     private final PresenceService presenceService;
     private final MongoTemplate mongoTemplate;
 
-    // ✅ Send message (synchronous)
+    // ✅ Async with @Async - maintains security context
+    @Async
     @Transactional
-    public ChatMessage sendMessage(String senderId, String receiverId, String content) {
+    public CompletableFuture<ChatMessage> sendMessage(String senderId, String receiverId, String content) {
         if (!userRepository.existsById(senderId)) {
             throw new UserNotFoundException("Sender not found with id: " + senderId);
         }
@@ -53,24 +57,27 @@ public class ChatService {
         // ✅ Send via WebSocket if user is online
         if (presenceService.isUserOnline(receiverId)) {
             String receiverUsername = userRepository.findById(receiverId)
-                    .map(user -> user.getUsername())
+                    .map(User::getUsername)
                     .orElseThrow(() -> new UserNotFoundException("Receiver not found"));
             messagingTemplate.convertAndSendToUser(
                     receiverUsername, "/queue/messages", savedMessage
             );
         }
 
-        return savedMessage;
+        return CompletableFuture.completedFuture(savedMessage);
     }
 
-    // ✅ Get conversation (synchronous)
-    public List<ChatMessage> getConversation(String user1Id, String user2Id) {
-        return chatMessageRepository.findConversation(user1Id, user2Id);
+    // ✅ Async with @Async
+    @Async
+    public CompletableFuture<List<ChatMessage>> getConversation(String user1Id, String user2Id) {
+        List<ChatMessage> messages = chatMessageRepository.findConversation(user1Id, user2Id);
+        return CompletableFuture.completedFuture(messages);
     }
 
-    // ✅ Save message (synchronous)
+    // ✅ Async with @Async
+    @Async
     @Transactional
-    public ChatMessage saveMessage(String senderId, String receiverId, String content) {
+    public CompletableFuture<ChatMessage> saveMessage(String senderId, String receiverId, String content) {
         if (!userRepository.existsById(receiverId)) {
             throw new UserNotFoundException("Receiver not found with id: " + receiverId);
         }
@@ -83,12 +90,14 @@ public class ChatService {
                 .read(false)
                 .build();
 
-        return chatMessageRepository.save(message);
+        ChatMessage savedMessage = chatMessageRepository.save(message);
+        return CompletableFuture.completedFuture(savedMessage);
     }
 
-    // ✅ Mark messages as read (synchronous)
+    // ✅ Async with @Async
+    @Async
     @Transactional
-    public void markMessagesAsRead(String senderId, String receiverId, List<String> messageIds) {
+    public CompletableFuture<Void> markMessagesAsRead(String senderId, String receiverId, List<String> messageIds) {
         Query query = new Query();
 
         if (messageIds != null && !messageIds.isEmpty()) {
@@ -107,9 +116,11 @@ public class ChatService {
         } else {
             logger.info("Marked all unread messages as read from {} → {}", senderId, receiverId);
         }
+
+        return CompletableFuture.completedFuture(null);
     }
 
-    // ✅ Update many messages as read (synchronous)
+    // Keep synchronous for simple operations
     public void updateManyAsRead(String senderId, String receiverId, List<String> messageIds) {
         Query query = new Query()
                 .addCriteria(Criteria.where("_id").in(messageIds)
@@ -118,7 +129,6 @@ public class ChatService {
                         .and("read").is(false));
 
         Update update = new Update().set("read", true);
-
         mongoTemplate.updateMulti(query, update, ChatMessage.class);
 
         logger.info("Marked {} messages as read from {} → {}", messageIds.size(), senderId, receiverId);

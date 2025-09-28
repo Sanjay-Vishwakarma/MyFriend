@@ -16,7 +16,8 @@ public class VirtualThreadConfig {
 
     @Bean(TaskExecutionAutoConfiguration.APPLICATION_TASK_EXECUTOR_BEAN_NAME)
     public AsyncTaskExecutor asyncTaskExecutor() {
-        return new TaskExecutorAdapter(Executors.newVirtualThreadPerTaskExecutor());
+        TaskExecutorAdapter adapter = new TaskExecutorAdapter(Executors.newVirtualThreadPerTaskExecutor());
+        return adapter;
     }
 
     @Bean

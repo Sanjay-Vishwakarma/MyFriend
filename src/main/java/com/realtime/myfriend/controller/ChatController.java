@@ -1,7 +1,6 @@
 package com.realtime.myfriend.controller;
 
 import com.realtime.myfriend.entity.ChatMessage;
-import com.realtime.myfriend.entity.User;
 import com.realtime.myfriend.exception.UserNotFoundException;
 import com.realtime.myfriend.repository.UserRepository;
 import com.realtime.myfriend.service.ChatService;
@@ -18,6 +17,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/chat")
@@ -34,65 +34,79 @@ public class ChatController {
     @PostMapping("/send")
     @Operation(summary = "Send a message")
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<ChatMessage> sendMessage(
+    public CompletableFuture<ResponseEntity<ChatMessage>> sendMessage(
             @RequestParam String receiverUsername,
             @RequestBody String content,
             Principal principal
     ) {
-        try {
-            String senderUsername = principal.getName();
+        String senderUsername = principal.getName();
 
-            User sender = userRepository.findByUsername(senderUsername)
-                    .orElseThrow(() -> new UserNotFoundException("Sender not found"));
-            User receiver = userRepository.findByUsername(receiverUsername)
-                    .orElseThrow(() -> new UserNotFoundException("Receiver not found"));
-
-            ChatMessage message = chatService.sendMessage(sender.getId(), receiver.getId(), content);
-            return ResponseEntity.ok(message);
-        } catch (UserNotFoundException ex) {
-            logger.error("User not found: {}", ex.getMessage());
-            return ResponseEntity.notFound().build();
-        } catch (Exception ex) {
-            logger.error("Failed to send message: {}", ex.getMessage());
-            return ResponseEntity.internalServerError().build();
-        }
+        return userService.getUserByUsername(senderUsername)
+                .thenCompose(sender -> userService.getUserByUsername(receiverUsername)
+                        .thenCompose(receiver -> {
+                            if (sender == null || receiver == null) {
+                                return CompletableFuture.failedFuture(new UserNotFoundException("Sender or receiver not found"));
+                            }
+                            return chatService.sendMessage(sender.getId(), receiver.getId(), content);
+                        }))
+                .thenApply(ResponseEntity::ok)
+                .handle((result, ex) -> {
+                    if (ex != null) {
+                        logger.error("Failed to send message: {}", ex.getMessage());
+                        if (ex.getCause() instanceof UserNotFoundException) {
+                            return ResponseEntity.notFound().build();
+                        }
+                        return ResponseEntity.internalServerError().build();
+                    }
+                    return result;
+                });
     }
 
     @GetMapping("/conversation")
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<List<ChatMessage>> getConversation(
+    public CompletableFuture<ResponseEntity<List<ChatMessage>>> getConversation(
             @RequestParam String user2Id,
             Principal principal
     ) {
-        try {
-            User currentUser = userRepository.findByUsername(principal.getName())
-                    .orElseThrow(() -> new UserNotFoundException("User not found"));
-
-            List<ChatMessage> messages = chatService.getConversation(currentUser.getId(), user2Id);
-            return ResponseEntity.ok(messages);
-        } catch (UserNotFoundException ex) {
-            logger.error("User not found: {}", ex.getMessage());
-            return ResponseEntity.notFound().build();
-        } catch (Exception ex) {
-            logger.error("Failed to get conversation: {}", ex.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return userService.getUserByUsername(principal.getName())
+                .thenCompose(user -> {
+                    if (user == null) {
+                        return CompletableFuture.failedFuture(new UserNotFoundException("User not found"));
+                    }
+                    return chatService.getConversation(user.getId(), user2Id);
+                })
+                .thenApply(ResponseEntity::ok)
+                .handle((result, ex) -> {
+                    if (ex != null) {
+                        logger.error("Failed to get conversation: {}", ex.getMessage());
+                        if (ex.getCause() instanceof UserNotFoundException) {
+                            return ResponseEntity.notFound().build();
+                        }
+                        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+                    }
+                    return result;
+                });
     }
 
     @PostMapping("/mark-read")
     @Operation(summary = "Mark messages as read")
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<Void> markMessagesAsRead(
+    public CompletableFuture<ResponseEntity<Void>> markMessagesAsRead(
             @RequestParam String senderId,
             @RequestParam String receiverId
     ) {
-        try {
-            chatService.markMessagesAsRead(senderId, receiverId, null);
-            return ResponseEntity.noContent().build();
-        } catch (Exception ex) {
-            logger.error("Failed to mark messages as read: {}", ex.getMessage());
-            return ResponseEntity.internalServerError().build();
-        }
+        return chatService.markMessagesAsRead(senderId, receiverId, null)
+                .thenApply(this::toVoidResponse)
+                .exceptionally(this::handleMarkReadError);
+    }
+
+    private ResponseEntity<Void> toVoidResponse(Void unused) {
+        return ResponseEntity.noContent().build();
+    }
+
+    private ResponseEntity<Void> handleMarkReadError(Throwable ex) {
+        logger.error("Failed to mark messages as read: {}", ex.getMessage());
+        return ResponseEntity.internalServerError().build();
     }
 
     @GetMapping("/testAuth")

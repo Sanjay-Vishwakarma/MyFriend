@@ -30,7 +30,7 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**", "/ws/**" ,"/home/test").permitAll()
+                        .requestMatchers("/auth/**", "/ws/**", "/home/test").permitAll()
                         .requestMatchers("/chat/**").hasRole("USER")
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
@@ -40,6 +40,10 @@ public class SecurityConfig {
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(authenticationEntryPoint())
+                )
+                // ✅ Add this for async security context propagation
+                .securityContext(securityContext -> securityContext
+                        .requireExplicitSave(false)
                 );
 
         return http.build();
