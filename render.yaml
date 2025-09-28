@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: my-spring-boot-app
+    name: my-friend
     env: docker
     plan: free
     autoDeploy: true
