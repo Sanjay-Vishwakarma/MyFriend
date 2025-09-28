@@ -46,12 +46,14 @@ public class AuthenticationService {
                         .online(false)
                         .role(request.getRole() != null ? request.getRole() : Role.USER) // Default to USER
                         .build();
-                
-                userRepository.save(user);
-                
+
+                User savedUser = userRepository.save(user);
+
                 var jwtToken = jwtService.generateToken(user).join();
                 return AuthenticationResponse.builder()
                         .token(jwtToken)
+                        .username(savedUser.getUsername())
+                        .userId(savedUser.getId())
                         .build();
             } catch (Exception e) {
                 logger.error("Error during user registration: {}", e.getMessage());
@@ -79,8 +81,11 @@ public class AuthenticationService {
                 var jwtToken = jwtService.generateToken(user).join();
                 return AuthenticationResponse.builder()
                         .token(jwtToken)
+                        .userId(user.getId())
+                        .username(user.getUsername())
                         .build();
             } catch (Exception e) {
+                e.printStackTrace();
                 logger.error("Authentication error for user {}: {}", request.getUsername(), e.getMessage());
                 throw new RuntimeException("Authentication failed", e);
             }

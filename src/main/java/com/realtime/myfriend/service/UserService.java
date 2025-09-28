@@ -1,6 +1,7 @@
 package com.realtime.myfriend.service;
 
 
+import com.realtime.myfriend.dtos.UserDTO;
 import com.realtime.myfriend.entity.User;
 import com.realtime.myfriend.entity.User.Role;
 import com.realtime.myfriend.exception.UserNotFoundException;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -36,8 +38,20 @@ public class UserService {
         );
     }
 
-    public CompletableFuture<List<User>> getAllUsers() {
-        return CompletableFuture.supplyAsync(userRepository::findAll);
+    public CompletableFuture<List<UserDTO>> getAllUsers() {
+        return CompletableFuture.supplyAsync(() ->
+                userRepository.findAll()
+                        .stream()
+                        .map(user -> new UserDTO(
+                                user.getId(),
+                                user.getName(),
+                                user.getEmail(),
+                                user.getUsername(),
+                                user.isOnline(),
+                                user.getLastSeen()
+                        ))
+                        .collect(Collectors.toList())
+        );
     }
 
     public CompletableFuture<List<User>> getOnlineUsers() {
@@ -84,7 +98,17 @@ public class UserService {
         });
     }
 
+    public String findIdByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .map(User::getId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+    }
 
 
+    public String findUsernameById(String senderId) {
+        return userRepository.findById(senderId)
+                .map(User::getUsername)
+                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + senderId));
+    }
 
 }

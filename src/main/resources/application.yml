@@ -1,7 +1,7 @@
 server:
   port: 9177
-  servlet:
-    context-path: /api
+#  servlet:
+#    context-path: /api
 
 spring:
   data:
@@ -29,6 +29,7 @@ logging:
   level:
     root: INFO
     com.communication.app: DEBUG
+    org.springframework.security: DEBUG
   file:
     name: logs/communication-app.log
   pattern:

@@ -1,6 +1,7 @@
 package com.realtime.myfriend.controller;
 
 
+import com.realtime.myfriend.dtos.UserDTO;
 import com.realtime.myfriend.entity.User;
 import com.realtime.myfriend.exception.UserNotFoundException;
 import com.realtime.myfriend.service.UserService;
@@ -18,26 +19,40 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/users")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Users", description = "User management API")
+@CrossOrigin("http://localhost:3000")
 public class UserController {
     private static final Logger logger = LoggerFactory.getLogger(UserController.class);
     
     private final UserService userService;
 
+//    @GetMapping
+//    @Operation(summary = "Get all users")
+//    @PreAuthorize("hasAuthority('ROLE_USER')")
+//    public CompletableFuture<ResponseEntity<List<UserDTO>>> getAllUsers() {
+//        return userService.getAllUsers()
+//                .thenApply(users -> {
+//                    logger.info("Successfully fetched {} users", users.size());
+//                    System.out.println(users);
+//                    return ResponseEntity.ok(users);
+//                })
+//                .exceptionally(e -> {
+//                    logger.error("Failed to get users: {}", e.getMessage(), e);
+//                    return ResponseEntity.internalServerError().build();
+//                });
+//    }
+
     @GetMapping
-    @Operation(summary = "Get all users")
     @PreAuthorize("hasRole('USER')")
-    public CompletableFuture<ResponseEntity<List<User>>> getAllUsers() {
-        return userService.getAllUsers()
-                .thenApply(ResponseEntity::ok)
-                .exceptionally(e -> {
-                    logger.error("Failed to get users: {}", e.getMessage());
-                    return ResponseEntity.internalServerError().build();
-                });
+    public ResponseEntity<List<UserDTO>> getAllUsers() {
+        List<UserDTO> users = userService.getAllUsers().join(); // block just for testing
+        System.out.println("users = " + users);
+        return ResponseEntity.ok(users);
     }
+
 
     @GetMapping("/online")
     @Operation(summary = "Get online users")
