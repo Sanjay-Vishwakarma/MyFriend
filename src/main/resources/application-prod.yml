@@ -1,6 +1,5 @@
 server:
-  port: 8080 # Render usually maps external port automatically
-
+  port: ${PORT:8080}  # Use Render's $PORT environment variable if present
 spring:
   data:
     mongodb:
