@@ -20,7 +20,7 @@ public class MyFriendApplication {
 	}
 
 
-	@Scheduled(fixedRate = 300000) // 5 minutes = 300,000 ms
+//	@Scheduled(fixedRate = 300000) // 5 minutes = 300,000 ms
 	public void heartBeat() {
 		HashMap<String, Object> map = new HashMap<>();
 		map.put("status", "OK");

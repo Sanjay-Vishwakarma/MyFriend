@@ -35,26 +35,29 @@ public class ChatWebSocketHandler {
             return;
         }
 
-        String username = principal.getName();
-        String senderId = userService.findIdByUsername(username);
-        chatMessage.setSenderId(senderId);
+        try {
+            String username = principal.getName();
+            String senderId = userService.findIdByUsername(username);
+            chatMessage.setSenderId(senderId);
 
-        chatService.saveMessage(senderId, chatMessage.getReceiverId(), chatMessage.getContent())
-                .thenAccept(saved -> {
-                    String senderUsername = userService.findUsernameById(saved.getSenderId());
-                    String receiverUsername = userService.findUsernameById(saved.getReceiverId());
+            // Synchronous call
+            ChatMessage savedMessage = chatService.saveMessage(senderId, chatMessage.getReceiverId(), chatMessage.getContent());
 
-                    // Send back to both users by username (Principal name)
-                    messagingTemplate.convertAndSendToUser(
-                            senderUsername, "/queue/messages", saved
-                    );
-                    messagingTemplate.convertAndSendToUser(
-                            receiverUsername, "/queue/messages", saved
-                    );
+            String senderUsername = userService.findUsernameById(savedMessage.getSenderId());
+            String receiverUsername = userService.findUsernameById(savedMessage.getReceiverId());
 
-                    logger.info("Message [{}] sent from {} → {}", saved.getId(), senderUsername, receiverUsername);
-                });
+            // Send back to both users by username (Principal name)
+            messagingTemplate.convertAndSendToUser(
+                    senderUsername, "/queue/messages", savedMessage
+            );
+            messagingTemplate.convertAndSendToUser(
+                    receiverUsername, "/queue/messages", savedMessage
+            );
 
+            logger.info("Message [{}] sent from {} → {}", savedMessage.getId(), senderUsername, receiverUsername);
+        } catch (Exception ex) {
+            logger.error("Failed to send message via WebSocket: {}", ex.getMessage());
+        }
     }
 
     @MessageMapping("/chat.read")
@@ -68,21 +71,25 @@ public class ChatWebSocketHandler {
             return;
         }
 
-        String username = principal.getName();
-        String readerId = userService.findIdByUsername(username);
+        try {
+            String username = principal.getName();
+            String readerId = userService.findIdByUsername(username);
 
-        if (!readerId.equals(receipt.getReceiverId())) {
-            logger.warn("User {} tried to spoof read receipts!", username);
-            return;
+            if (!readerId.equals(receipt.getReceiverId())) {
+                logger.warn("User {} tried to spoof read receipts!", username);
+                return;
+            }
+
+            // Synchronous call
+            chatService.markMessagesAsRead(receipt.getSenderId(), receipt.getReceiverId(), receipt.getMessageIds());
+
+            messagingTemplate.convertAndSendToUser(
+                    receipt.getSenderId(), "/queue/read", receipt
+            );
+
+            logger.info("User {} marked messages as read from {}", receipt.getReceiverId(), receipt.getSenderId());
+        } catch (Exception ex) {
+            logger.error("Failed to mark messages as read via WebSocket: {}", ex.getMessage());
         }
-
-        chatService.markMessagesAsRead(receipt.getSenderId(), receipt.getReceiverId(), receipt.getMessageIds());
-
-        messagingTemplate.convertAndSendToUser(
-                receipt.getSenderId(), "/queue/read", receipt
-        );
-
-        logger.info("User {} marked messages as read from {}", receipt.getReceiverId(), receipt.getSenderId());
     }
-
 }

@@ -1,8 +1,9 @@
 package com.realtime.myfriend.controller;
 
-
 import com.realtime.myfriend.entity.ChatMessage;
+import com.realtime.myfriend.entity.User;
 import com.realtime.myfriend.exception.UserNotFoundException;
+import com.realtime.myfriend.repository.UserRepository;
 import com.realtime.myfriend.service.ChatService;
 import com.realtime.myfriend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,10 +16,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
 import java.security.Principal;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/chat")
@@ -27,88 +26,78 @@ import java.util.concurrent.CompletableFuture;
 @Tag(name = "Chat", description = "Chat API")
 public class ChatController {
     private static final Logger logger = LoggerFactory.getLogger(ChatController.class);
-    
-    private final ChatService chatService;
 
+    private final ChatService chatService;
     private final UserService userService;
+    private final UserRepository userRepository;
 
     @PostMapping("/send")
     @Operation(summary = "Send a message")
     @PreAuthorize("hasRole('USER')")
-    public CompletableFuture<ResponseEntity<ChatMessage>> sendMessage(
+    public ResponseEntity<ChatMessage> sendMessage(
             @RequestParam String receiverUsername,
             @RequestBody String content,
-            Principal principal // current user
+            Principal principal
     ) {
-        String senderUsername = principal.getName(); // get sender from logged-in user
+        try {
+            String senderUsername = principal.getName();
 
-        return userService.getUserByUsername(senderUsername)
-                .thenCombine(userService.getUserByUsername(receiverUsername),
-                        (sender, receiver) -> {
-                            if (sender == null || receiver == null) {
-                                throw new UserNotFoundException("Sender or receiver not found");
-                            }
-                            return chatService.sendMessage(sender.getId(), receiver.getId(), content)
-                                    .join();
-                        })
-                .thenApply(ResponseEntity::ok)
-                .exceptionally(ex -> {
-                    logger.error("Failed to send message: {}", ex.getMessage());
-                    return ResponseEntity.internalServerError().build();
-                });
+            User sender = userRepository.findByUsername(senderUsername)
+                    .orElseThrow(() -> new UserNotFoundException("Sender not found"));
+            User receiver = userRepository.findByUsername(receiverUsername)
+                    .orElseThrow(() -> new UserNotFoundException("Receiver not found"));
+
+            ChatMessage message = chatService.sendMessage(sender.getId(), receiver.getId(), content);
+            return ResponseEntity.ok(message);
+        } catch (UserNotFoundException ex) {
+            logger.error("User not found: {}", ex.getMessage());
+            return ResponseEntity.notFound().build();
+        } catch (Exception ex) {
+            logger.error("Failed to send message: {}", ex.getMessage());
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     @GetMapping("/conversation")
     @PreAuthorize("hasRole('USER')")
-    public CompletableFuture<ResponseEntity<List<ChatMessage>>> getConversation(
+    public ResponseEntity<List<ChatMessage>> getConversation(
             @RequestParam String user2Id,
             Principal principal
     ) {
         try {
-            String currentUsername = principal.getName();
-            logger.debug("Current username: {}", currentUsername);
+            User currentUser = userRepository.findByUsername(principal.getName())
+                    .orElseThrow(() -> new UserNotFoundException("User not found"));
 
-            // Get current user ID from username
-            return userService.getUserByUsername(currentUsername)
-                    .thenApply(currentUser -> {
-                        String currentUserId = currentUser.getId();
-                        logger.debug("Current user ID: {}, Other user ID: {}", currentUserId, user2Id);
-
-                        List<ChatMessage> conversation = chatService.findConversation(currentUserId, user2Id);
-                        logger.debug("Found {} messages in conversation", conversation.size());
-
-                        return ResponseEntity.ok(conversation);
-                    })
-                    .exceptionally(ex -> {
-                        logger.error("Failed to get conversation: {}", ex.getMessage());
-                        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-                    });
-        } catch (Exception e) {
-            logger.error("Error in getConversation: {}", e.getMessage());
-            return CompletableFuture.completedFuture(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
+            List<ChatMessage> messages = chatService.getConversation(currentUser.getId(), user2Id);
+            return ResponseEntity.ok(messages);
+        } catch (UserNotFoundException ex) {
+            logger.error("User not found: {}", ex.getMessage());
+            return ResponseEntity.notFound().build();
+        } catch (Exception ex) {
+            logger.error("Failed to get conversation: {}", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
     @PostMapping("/mark-read")
     @Operation(summary = "Mark messages as read")
     @PreAuthorize("hasRole('USER')")
-    public CompletableFuture<ResponseEntity<Void>> markMessagesAsRead(
+    public ResponseEntity<Void> markMessagesAsRead(
             @RequestParam String senderId,
             @RequestParam String receiverId
     ) {
-        return chatService.markMessagesAsRead(senderId, receiverId, null) // ✅ null = mark all
-                .thenApply(unused -> ResponseEntity.noContent().<Void>build())
-                .exceptionally(ex -> {
-                    logger.error("Failed to mark messages as read: {}", ex.getMessage());
-                    return ResponseEntity.internalServerError().<Void>build();
-                });
+        try {
+            chatService.markMessagesAsRead(senderId, receiverId, null);
+            return ResponseEntity.noContent().build();
+        } catch (Exception ex) {
+            logger.error("Failed to mark messages as read: {}", ex.getMessage());
+            return ResponseEntity.internalServerError().build();
+        }
     }
-
 
     @GetMapping("/testAuth")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<String> testAuth(Principal principal) {
         return ResponseEntity.ok("Authenticated as: " + principal.getName());
     }
-
 }
