@@ -5,10 +5,10 @@ services:
     plan: free
     autoDeploy: true
     dockerfilePath: ./Dockerfile
-    branch: main
+    branch: master   # ✅ change this to your actual branch
     healthCheckPath: /
     envVars:
       - key: SPRING_PROFILES_ACTIVE
-        value: prod  # change to dev for development deployment
+        value: prod
       - key: JAVA_OPTS
         value: "-Xms256m -Xmx512m"
