@@ -6,7 +6,7 @@ services:
     autoDeploy: true
     dockerfilePath: ./Dockerfile
     branch: master   # ✅ change this to your actual branch
-    healthCheckPath: /actuator/health
+    healthCheckPath: /actuator/ready
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
