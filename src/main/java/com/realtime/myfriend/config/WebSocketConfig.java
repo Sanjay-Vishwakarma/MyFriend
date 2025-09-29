@@ -42,7 +42,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
                 .addInterceptors(new HttpHandshakeInterceptor())
-                .setAllowedOrigins("*") // allow all in prod/dev
+                .setAllowedOrigins("http://localhost:3000", "https://yourdomain.com")
                 .withSockJS();
 
         // Skip broker in prod: log info
