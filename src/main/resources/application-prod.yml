@@ -1,10 +1,13 @@
 server:
-  port: ${PORT:8080}  # Use Render's injected port
+  port: ${PORT:8080}  # Render injects port
+
 spring:
+  jmx:
+    enabled: false
   data:
     mongodb:
       uri: mongodb+srv://sjroot9:gvBZZkzcKXWGGRru@recharge.xniae.mongodb.net/my_friend?retryWrites=true&w=majority
-      auto-index-creation: true
+      auto-index-creation: false  # 🚀 speed up startup
   security:
     user:
       name: ${SPRING_ADMIN_USER:admin}
@@ -12,7 +15,7 @@ spring:
   main:
     banner-mode: off
     allow-circular-references: true
-    lazy-initialization: true  # ✅ lazy init speeds up startup
+    lazy-initialization: true     # 🚀 lazy init for faster startup
 
 app:
   jwt:
@@ -23,13 +26,16 @@ app:
     allowed-origins: "*"
     broker-prefix: /topic
     user-destination-prefix: /user
-    enable-simple-broker: false  # ❌ Skip SimpleBroker in PROD
+    enable-simple-broker: false   # 🚀 skip simple broker in prod
 
 logging:
   level:
     root: INFO
     com.communication.app: INFO
     org.springframework.security: INFO
+    sun.rmi: WARN
+    javax.management.remote.rmi: WARN
+
   file:
     name: logs/communication-app.log
   pattern:

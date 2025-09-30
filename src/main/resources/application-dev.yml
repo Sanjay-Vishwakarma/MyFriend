@@ -1,13 +1,13 @@
 server:
-  port: 9177
-#  servlet:
-#    context-path: /api
+  port: 9177  # fixed local port
 
 spring:
+  jmx:
+    enabled: false  # optional if you don't use JMX locally
   data:
     mongodb:
       uri: mongodb://localhost:27017/my_friend
-      auto-index-creation: true
+      auto-index-creation: true   # ✅ auto-create indexes in dev
   security:
     user:
       name: admin
@@ -19,18 +19,22 @@ spring:
 app:
   jwt:
     secret: 0A6DHDpE3Cqdwe7JXm7c1SPRki0moOwfKBaB5aZ5zmM=
-    expiration-ms: 86400000 # 24 hours
+    expiration-ms: 86400000
   websocket:
     endpoint: /ws
     allowed-origins: "*"
     broker-prefix: /topic
     user-destination-prefix: /user
+    enable-simple-broker: true  # ✅ simple broker enabled in dev
 
 logging:
   level:
     root: INFO
     com.communication.app: DEBUG
     org.springframework.security: DEBUG
+    sun.rmi: WARN
+    javax.management.remote.rmi: WARN
+
   file:
     name: logs/communication-app.log
   pattern:
