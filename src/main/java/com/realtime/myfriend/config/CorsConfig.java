@@ -19,6 +19,7 @@ public class CorsConfig {
         // ✅ Allow only React app (local + LAN)
         config.addAllowedOrigin("http://localhost:3000");
         config.addAllowedOrigin("http://192.168.1.71:3000");
+        config.addAllowedOrigin("https://myfriend-frontend-eight.vercel.app");
 //        config.addAllowedOriginPattern("*"); // Use patterns for production
         config.addAllowedHeader("*");
         config.addAllowedMethod("*");
