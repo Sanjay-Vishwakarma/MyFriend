@@ -19,13 +19,4 @@ public class MyFriendApplication {
 		SpringApplication.run(MyFriendApplication.class, args);
 	}
 
-
-	@Scheduled(fixedRate = 300000) // 5 minutes = 300,000 ms
-	public void heartBeat() {
-		HashMap<String, Object> map = new HashMap<>();
-		map.put("status", "OK");
-		map.put("message", "HeartBeat");
-		map.put("timestamp", System.currentTimeMillis());
-		System.out.println(map); // since Scheduled methods shouldn’t return ResponseEntity
-	}
 }
