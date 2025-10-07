@@ -50,4 +50,4 @@ management:
       show-details: never
 
 health:
-  check: https://myfriend-frontend-eight.vercel.app/actuator/ready
+  check: https://my-friend-bhmy.onrender.com/actuator/ready
