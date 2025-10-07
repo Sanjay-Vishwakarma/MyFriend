@@ -49,3 +49,7 @@ management:
   endpoint:
     health:
       show-details: never
+
+
+health:
+  check: https://myfriend-frontend-eight.vercel.app/actuator/ready

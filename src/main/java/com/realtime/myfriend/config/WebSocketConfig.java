@@ -42,9 +42,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
                 .addInterceptors(new HttpHandshakeInterceptor())
-
-                .setAllowedOrigins("http://localhost:3000","http://192.168.0.105:9177","https://myfriend-frontend-eight.vercel.app") // allow all in prod/dev
-
+                .setAllowedOrigins("http://localhost:3000","http://192.168.0.101:3000","https://myfriend-frontend-eight.vercel.app") // allow all in prod/dev
                 .withSockJS();
 
         // Skip broker in prod: log info
